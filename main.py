@@ -36,7 +36,7 @@ def time_sub_day(get_time):
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    if(not db.user_exists(message.from_user.id)):
+    if (not db.user_exists(message.from_user.id)):
         db.add_user(message.from_user.id)
         await bot.send_message(message.from_user.id, 'Укажите ваш ник')
     else:
@@ -51,7 +51,9 @@ async def start(message: types.Message):
 async def handle_new_members(message: types.Message):
     for member in message.new_chat_members:
         if db.user_exists(member.id) and db.get_sub_status(member.id):
-            await bot.restrict_chat_member(message.chat.id, member.id, types.ChatPermissions())
+            await bot.restrict_chat_member(
+                message.chat.id, member.id, types.ChatPermissions()
+            )
         else:
             await bot.ban_chat_member(message.chat.id, member.id)
             await asyncio.sleep(5)
@@ -64,14 +66,20 @@ async def bot_message(message: types.Message):
         if message.text == 'ПРОФИЛЬ':
             user_nickname = 'Ваш ник:' + db.get_nickname(message.from_user.id)
             user_sub = time_sub_day(db.get_time_sub(message.from_user.id))
-            if user_sub == False:
+            if user_sub is False:
                 user_sub = 'НЕТ'
             else:
                 user_sub = '\nПодписка: ' + user_sub
-            await bot.send_message(message.from_user.id, user_nickname + user_sub)
+            await bot.send_message(
+                message.from_user.id, user_nickname + user_sub
+            )
 
         elif message.text == 'ПОДПИСКА':
-            await bot.send_message(message.from_user.id, 'Описание подписки', reply_markup=nav.sub_inline_markup)
+            await bot.send_message(
+                message.from_user.id,
+                'Описание подписки',
+                reply_markup=nav.sub_inline_markup
+            )
 
         elif message.text == 'ССЫЛКА':
             if db.get_sub_status(message.from_user.id):
@@ -80,7 +88,7 @@ async def bot_message(message: types.Message):
                 await bot.send_message(message.from_user.id, 'купите подписку')
         else:
             if db.get_signup(message.from_user.id) == 'setnickname':
-                if(len(message.text) > 15):
+                if (len(message.text) > 15):
                     await bot.send_message(
                         message.from_user.id,
                         'Никнейм не должен превышать 15 символов'
@@ -127,7 +135,9 @@ async def process_pay(message: types.Message):
     if message.successful_payment.invoice_payload == 'month_sub':
         time_sub = int(time.time()) + days_to_seconds(30)
         db.set_time_sub(message.from_user.id, time_sub)
-        await bot.send_message(message.from_user.id, 'вам выдана подписка на месяц!')
+        await bot.send_message(
+            message.from_user.id, 'вам выдана подписка на месяц!'
+        )
 
 
 if __name__ == '__main__':

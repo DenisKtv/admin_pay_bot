@@ -1,6 +1,7 @@
 import sqlite3
 import time
 
+
 class Database:
     def __init__(self, db_file):
         self.connection = sqlite3.connect(db_file)
