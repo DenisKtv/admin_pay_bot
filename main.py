@@ -1,4 +1,4 @@
-from data import TOKEN
+from data import TOKEN, CHAT_ID
 import logging
 import asyncio
 from aiogram import Bot, Dispatcher, executor, types
@@ -6,12 +6,14 @@ from aiogram.types.message import ContentType
 import markups as nav
 import time
 import datetime
+import aiocron
 from db import Database
 
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=TOKEN)
+chat_id = CHAT_ID
 YOOTOKEN = '381764678:TEST:56520'
 dp = Dispatcher(bot)
 
@@ -58,16 +60,48 @@ async def handle_new_members(message: types.Message):
             await bot.ban_chat_member(message.chat.id, member.id)
             await asyncio.sleep(5)
             await bot.unban_chat_member(message.chat.id, member.id)
+            await bot.send_message(
+                member.id,
+                'У вас нет подписки, вы не можете присоединяться к этому '
+                'каналу!')
+
+
+async def check_subscriptions():
+    now = int(time.time())
+    users = db.get_all_users()
+    for user in users:
+        user_id = user[1]
+        sub_end_time = user[3]
+        time_left = sub_end_time - now
+        if time_left < now:
+            await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+            await asyncio.sleep(5)
+            await bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
+            await bot.send_message(
+                user_id,
+                'Ваша подписка закончилась!')
+        elif time_left <= datetime.timedelta(days=3).total_seconds():
+            days_left = int(time_left / (24 * 60 * 60))
+            hours_left = int(time_left / (60 * 60) % 24)
+            minutes_left = int(time_left / 60 % 60)
+            message = (f'Вашей подписке осталось: дней {days_left} '
+                       f'часов {hours_left}:{minutes_left}')
+            await bot.send_message(user_id, message)
+
+
+@aiocron.crontab('28 21 * * *')  # запуск каждый день в 00:00
+async def check_subscriptions_job():
+    await check_subscriptions()
 
 
 @dp.message_handler()
 async def bot_message(message: types.Message):
     if message.chat.type == 'private':
         if message.text == 'ПРОФИЛЬ':
-            user_nickname = 'Ваш ник:' + db.get_nickname(message.from_user.id)
+            user_nickname = 'Ваш ник: ' + db.get_nickname(message.from_user.id)
             user_sub = time_sub_day(db.get_time_sub(message.from_user.id))
             if user_sub is False:
-                user_sub = 'НЕТ'
+                user_sub = '\n Подписка: НЕТ'
             else:
                 user_sub = '\nПодписка: ' + user_sub
             await bot.send_message(

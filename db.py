@@ -83,3 +83,9 @@ class Database:
                 return True
             else:
                 return False
+
+    def get_all_users(self):
+        with self.connection:
+            result = self.cursor.execute('SELECT * FROM users')
+            users = result.fetchall()
+            return users
