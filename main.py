@@ -1,8 +1,10 @@
-from data import TOKEN, CHAT_ID
 import logging
+import os
 import asyncio
+# import stripe
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentType
+from dotenv import load_dotenv
 import markups as nav
 import time
 import datetime
@@ -10,13 +12,14 @@ import aiocron
 from db import Database
 
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN)
-chat_id = CHAT_ID
-YOOTOKEN = '381764678:TEST:56520'
+bot = Bot(token=os.getenv('TOKEN', default='some_key'))
+chat_id = os.getenv('CHAT_ID')
+GROUP_URL = os.getenv('GROUP_URL')
+STRIP = os.getenv('STRIP')
 dp = Dispatcher(bot)
-
 db = Database('database.db')
 
 
@@ -34,6 +37,11 @@ def time_sub_day(get_time):
         dt = dt.replace('days', 'дней')
         dt = dt.replace('day', 'день')
         return dt
+
+
+async def check_member(chat_id: int, user_id: int) -> bool:
+    chat_member = await bot.get_chat_member(chat_id, user_id)
+    return chat_member.status != 'left'
 
 
 @dp.message_handler(commands=['start'])
@@ -60,10 +68,13 @@ async def handle_new_members(message: types.Message):
             await bot.ban_chat_member(message.chat.id, member.id)
             await asyncio.sleep(5)
             await bot.unban_chat_member(message.chat.id, member.id)
-            await bot.send_message(
+            await bot.send_photo(
                 member.id,
-                'У вас нет подписки, вы не можете присоединяться к этому '
-                'каналу!')
+                photo=open('static/ha-ha.jpg', 'rb'),
+                caption='У вас нет подписки, вы не можете присоединяться к '
+                'этому каналу!',
+            )
+            await bot.send_message(member.id, '/start')
 
 
 async def check_subscriptions():
@@ -73,23 +84,28 @@ async def check_subscriptions():
         user_id = user[1]
         sub_end_time = user[3]
         time_left = sub_end_time - now
-        if time_left < now:
+        if time_left < now and await check_member(chat_id, user_id) is True:
             await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
             await asyncio.sleep(5)
             await bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
-            await bot.send_message(
+            await bot.send_photo(
                 user_id,
-                'Ваша подписка закончилась!')
-        elif time_left <= datetime.timedelta(days=3).total_seconds():
+                photo=open('static/loh.jpg', 'rb'),
+                caption='Ваша подписка закончилась!')
+        elif time_left <= datetime.timedelta(days=3).total_seconds() and await check_member(chat_id, user_id) is True:
             days_left = int(time_left / (24 * 60 * 60))
             hours_left = int(time_left / (60 * 60) % 24)
             minutes_left = int(time_left / 60 % 60)
             message = (f'Вашей подписке осталось: дней {days_left} '
                        f'часов {hours_left}:{minutes_left}')
-            await bot.send_message(user_id, message)
+            await bot.send_photo(
+                user_id,
+                photo=open('static/tik-tak.webp', 'rb'),
+                caption=message
+            )
 
 
-@aiocron.crontab('28 21 * * *')  # запуск каждый день в 00:00
+@aiocron.crontab('01 00 * * *')  # запуск каждый день в 00:00
 async def check_subscriptions_job():
     await check_subscriptions()
 
@@ -98,7 +114,8 @@ async def check_subscriptions_job():
 async def bot_message(message: types.Message):
     if message.chat.type == 'private':
         if message.text == 'ПРОФИЛЬ':
-            user_nickname = 'Ваш ник: ' + db.get_nickname(message.from_user.id)
+            user_nickname = ('Ник: FIRE BEAVERS ' +
+                             db.get_nickname(message.from_user.id))
             user_sub = time_sub_day(db.get_time_sub(message.from_user.id))
             if user_sub is False:
                 user_sub = '\n Подписка: НЕТ'
@@ -117,9 +134,22 @@ async def bot_message(message: types.Message):
 
         elif message.text == 'ССЫЛКА':
             if db.get_sub_status(message.from_user.id):
-                await bot.send_message(message.from_user.id, 'ссылка')
+                await bot.send_photo(
+                    message.from_user.id,
+                    photo=open('static/in_group.jpg', 'rb'),
+                )
+                await bot.send_message(
+                    message.from_user.id,
+                    text='<a href="{}">Перейти в группу</a>'.format(GROUP_URL),
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
             else:
-                await bot.send_message(message.from_user.id, 'купите подписку')
+                await bot.send_photo(
+                    message.from_user.id,
+                    photo=open('static/plati.jpg', 'rb'),
+                    caption='Купите подписку')
+
         else:
             if db.get_signup(message.from_user.id) == 'setnickname':
                 if (len(message.text) > 15):
@@ -135,9 +165,10 @@ async def bot_message(message: types.Message):
                 else:
                     db.set_nickname(message.from_user.id, message.text)
                     db.set_signup(message.from_user.id, 'done')
-                    await bot.send_message(
+                    await bot.send_photo(
                         message.from_user.id,
-                        'Регистрация прошла успешно!',
+                        photo=open('static/welcome.jpg', 'rb'),
+                        caption='Регистрация прошла успешно!',
                         reply_markup=nav.mainMenu
                     )
             else:
@@ -150,12 +181,12 @@ async def submonth(call: types.CallbackQuery):
     await bot.send_invoice(
         chat_id=call.from_user.id,
         title='Oформление подписки',
-        description='Тестовое описание товара',
+        description='Подписка на канал',
         payload='month_sub',
-        provider_token=YOOTOKEN,
-        currency='RUB',
+        provider_token=STRIP,
+        currency='usd',
         start_parameter='test_bot',
-        prices=[{'label': 'Руб', 'amount': 15000}]
+        prices=[{'label': 'usd', 'amount': 100}]
     )
 
 
@@ -169,8 +200,10 @@ async def process_pay(message: types.Message):
     if message.successful_payment.invoice_payload == 'month_sub':
         time_sub = int(time.time()) + days_to_seconds(30)
         db.set_time_sub(message.from_user.id, time_sub)
-        await bot.send_message(
-            message.from_user.id, 'вам выдана подписка на месяц!'
+        await bot.send_photo(
+            message.from_user.id,
+            photo=open('static/capitalizm.jpeg', 'rb'),
+            caption='Вам выдана подписка на месяц!'
         )
 
 
