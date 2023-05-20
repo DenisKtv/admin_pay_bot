@@ -19,6 +19,8 @@ bot = Bot(token=os.getenv('TOKEN', default='some_key'))
 chat_id = os.getenv('CHAT_ID')
 GROUP_URL = os.getenv('GROUP_URL')
 STRIP = os.getenv('STRIP')
+UKASSA = os.getenv('UKASSA')
+
 dp = Dispatcher(bot)
 db = Database('database.db')
 
@@ -92,7 +94,8 @@ async def check_subscriptions():
                 user_id,
                 photo=open('static/loh.jpg', 'rb'),
                 caption='Ваша подписка закончилась!')
-        elif time_left <= datetime.timedelta(days=3).total_seconds() and await check_member(chat_id, user_id) is True:
+        elif time_left <= datetime.timedelta(days=3).total_seconds() and \
+                await check_member(chat_id, user_id) is True:
             days_left = int(time_left / (24 * 60 * 60))
             hours_left = int(time_left / (60 * 60) % 24)
             minutes_left = int(time_left / 60 % 60)
@@ -186,25 +189,52 @@ async def submonth(call: types.CallbackQuery):
         provider_token=STRIP,
         currency='usd',
         start_parameter='test_bot',
-        prices=[{'label': 'usd', 'amount': 100}]
+        prices=[{'label': 'usd', 'amount': 500}]
+    )
+
+
+@dp.callback_query_handler(text='submonthru')
+async def submonthru(call: types.CallbackQuery):
+    await bot.delete_message(call.from_user.id, call.message.message_id)
+    await bot.send_invoice(
+        chat_id=call.from_user.id,
+        title='Oформление подписки',
+        description='Подписка на канал',
+        payload='month_sub',
+        provider_token=UKASSA,
+        currency='rub',
+        start_parameter='test_bot',
+        prices=[{'label': 'rub', 'amount': 36000}]
     )
 
 
 @dp.pre_checkout_query_handler()
-async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+async def process_pre_checkout_query(
+    pre_checkout_query: types.PreCheckoutQuery
+):
     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
 @dp.message_handler(content_types=ContentType.SUCCESSFUL_PAYMENT)
 async def process_pay(message: types.Message):
     if message.successful_payment.invoice_payload == 'month_sub':
-        time_sub = int(time.time()) + days_to_seconds(30)
-        db.set_time_sub(message.from_user.id, time_sub)
-        await bot.send_photo(
-            message.from_user.id,
-            photo=open('static/capitalizm.jpeg', 'rb'),
-            caption='Вам выдана подписка на месяц!'
-        )
+        if db.get_time_sub(message.from_user.id) < int(time.time()):
+            time_sub = int(time.time()) + days_to_seconds(30)
+            db.set_time_sub(message.from_user.id, time_sub)
+            await bot.send_photo(
+                message.from_user.id,
+                photo=open('static/capitalizm.jpeg', 'rb'),
+                caption='Вам выдана подписка на месяц!'
+            )
+        else:
+            time_sub = (db.get_time_sub(message.from_user.id) +
+                        days_to_seconds(30))
+            db.set_time_sub(message.from_user.id, time_sub)
+            await bot.send_photo(
+                message.from_user.id,
+                photo=open('static/capitalizm.jpeg', 'rb'),
+                caption='Вам выдана подписка на месяц!'
+            )
 
 
 if __name__ == '__main__':
