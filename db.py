@@ -1,5 +1,6 @@
 import sqlite3
 import time
+import datetime
 
 
 class Database:
@@ -89,3 +90,12 @@ class Database:
             result = self.cursor.execute('SELECT * FROM users')
             users = result.fetchall()
             return users
+
+    def add_payment(self, user_id, tg_payment_id, provider_payment_id):
+        date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self.connection:
+            return self.cursor.execute(
+                "INSERT INTO payments (user_id, tg_payment_id, "
+                "provider_payment_id, date) VALUES (?, ?, ?, ?)",
+                (user_id, tg_payment_id, provider_payment_id, date)
+            )

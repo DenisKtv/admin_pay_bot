@@ -81,12 +81,15 @@ async def handle_new_members(message: types.Message):
 
 async def check_subscriptions():
     now = int(time.time())
+    three_days = now + 3 * 24 * 60 * 60
     users = db.get_all_users()
     for user in users:
         user_id = user[1]
         sub_end_time = user[3]
         time_left = sub_end_time - now
-        if time_left < now and await check_member(chat_id, user_id) is True:
+        print(time_left)
+        print(now)
+        if sub_end_time < now and await check_member(chat_id, user_id) is True:
             await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
             await asyncio.sleep(5)
             await bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
@@ -94,8 +97,7 @@ async def check_subscriptions():
                 user_id,
                 photo=open('static/loh.jpg', 'rb'),
                 caption='Ваша подписка закончилась!')
-        elif time_left <= datetime.timedelta(days=3).total_seconds() and \
-                await check_member(chat_id, user_id) is True:
+        elif sub_end_time <= three_days and await check_member(chat_id, user_id) is True:
             days_left = int(time_left / (24 * 60 * 60))
             hours_left = int(time_left / (60 * 60) % 24)
             minutes_left = int(time_left / 60 % 60)
@@ -108,7 +110,7 @@ async def check_subscriptions():
             )
 
 
-@aiocron.crontab('01 00 * * *')  # запуск каждый день в 00:00
+@aiocron.crontab('35 14 * * *')  # запуск каждый день в 00:00
 async def check_subscriptions_job():
     await check_subscriptions()
 
@@ -218,6 +220,11 @@ async def process_pre_checkout_query(
 @dp.message_handler(content_types=ContentType.SUCCESSFUL_PAYMENT)
 async def process_pay(message: types.Message):
     if message.successful_payment.invoice_payload == 'month_sub':
+        db.add_payment(
+            message.from_user.id,
+            message.successful_payment.telegram_payment_charge_id,
+            message.successful_payment.provider_payment_charge_id,
+        )
         if db.get_time_sub(message.from_user.id) < int(time.time()):
             time_sub = int(time.time()) + days_to_seconds(30)
             db.set_time_sub(message.from_user.id, time_sub)
