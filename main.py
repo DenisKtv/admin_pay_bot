@@ -59,24 +59,45 @@ async def start(message: types.Message):
         )
 
 
-@dp.message_handler(content_types=['new_chat_members'])
-async def handle_new_members(message: types.Message):
-    for member in message.new_chat_members:
-        if db.user_exists(member.id) and db.get_sub_status(member.id):
-            await bot.restrict_chat_member(
-                message.chat.id, member.id, types.ChatPermissions()
-            )
-        else:
-            await bot.ban_chat_member(message.chat.id, member.id)
-            await asyncio.sleep(5)
-            await bot.unban_chat_member(message.chat.id, member.id)
-            await bot.send_photo(
-                member.id,
-                photo=open('static/ha-ha.jpg', 'rb'),
-                caption='У вас нет подписки, вы не можете присоединяться к '
-                'этому каналу!',
-            )
-            await bot.send_message(member.id, '/start')
+# @dp.message_handler(content_types=['new_chat_members'])
+# async def handle_new_members(message: types.Message):
+#     for member in message.new_chat_members:
+#         if db.user_exists(member.id) and db.get_sub_status(member.id):
+#             await bot.restrict_chat_member(
+#                 message.chat.id, member.id, types.ChatPermissions()
+#             )
+#         else:
+#             await bot.ban_chat_member(message.chat.id, member.id)
+#             await asyncio.sleep(5)
+#             await bot.unban_chat_member(message.chat.id, member.id)
+#             await bot.send_photo(
+#                 member.id,
+#                 photo=open('static/ha-ha.jpg', 'rb'),
+#                 caption='У вас нет подписки, вы не можете присоединяться к '
+#                 'этому каналу!',
+#             )
+#             await bot.send_message(member.id, '/start')
+
+
+@dp.chat_join_request_handler()
+async def join(update: types.ChatJoinRequest):
+    if db.user_exists(update.from_user.id) and \
+            db.get_sub_status(update.from_user.id):
+        await bot.restrict_chat_member(
+            chat_id, update.from_user.id, types.ChatPermissions()
+        )
+        await update.approve()
+    else:
+        await bot.ban_chat_member(chat_id, update.from_user.id)
+        await asyncio.sleep(5)
+        await bot.unban_chat_member(chat_id, update.from_user.id)
+        await bot.send_photo(
+            update.from_user.id,
+            photo=open('static/ha-ha.jpg', 'rb'),
+            caption='У вас нет подписки, вы не можете присоединяться к '
+            'этому каналу!',
+        )
+        await bot.send_message(update.from_user.id, '/start')
 
 
 async def check_subscriptions():
@@ -97,7 +118,8 @@ async def check_subscriptions():
                 user_id,
                 photo=open('static/loh.jpg', 'rb'),
                 caption='Ваша подписка закончилась!')
-        elif sub_end_time <= three_days and await check_member(chat_id, user_id) is True:
+        elif sub_end_time <= three_days and \
+                await check_member(chat_id, user_id) is True:
             days_left = int(time_left / (24 * 60 * 60))
             hours_left = int(time_left / (60 * 60) % 24)
             minutes_left = int(time_left / 60 % 60)
