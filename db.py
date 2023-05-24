@@ -20,7 +20,8 @@ class Database:
         """Проверяем существует ли пользователь в бд"""
         with self.connection:
             result = self.cursor.execute(
-                "SELECT * FROM users WHERE user_id = ?", (user_id,)
+                "SELECT * FROM users WHERE user_id = :user_id",
+                {'user_id': user_id}
             ).fetchall()
             return bool(len(result))
 
@@ -28,15 +29,17 @@ class Database:
         """Добовляет никнейм пользователю"""
         with self.connection:
             return self.cursor.execute(
-                "UPDATE users SET nickname = ? WHERE user_id = ?",
-                (nickname, user_id,)
+                "UPDATE users SET nickname = :nickname WHERE "
+                "user_id = :user_id",
+                {'nickname': nickname, 'user_id': user_id}
             )
 
     def get_signup(self, user_id):
         """Выводит статус регистрации"""
         with self.connection:
             result = self.cursor.execute(
-                "SELECT signup FROM users WHERE user_id = ?", (user_id,)
+                "SELECT signup FROM users WHERE user_id = :user_id",
+                {'user_id': user_id}
             )
             signup = str(result.fetchone()[0])
             return signup
@@ -45,16 +48,16 @@ class Database:
         """Обновляет статус регистрации"""
         with self.connection:
             return self.cursor.execute(
-                "UPDATE users SET signup = ? WHERE user_id = ?",
-                (signup, user_id,)
+                "UPDATE users SET signup = :signup WHERE user_id = :user_id",
+                {'signup': signup, 'user_id': user_id}
             )
 
     def get_nickname(self, user_id):
         """Выводит никнейм пользователя"""
         with self.connection:
             result = self.cursor.execute(
-                "SELECT nickname FROM users WHERE user_id = ?",
-                (user_id,)
+                "SELECT nickname FROM users WHERE user_id = :user_id",
+                {'user_id': user_id}
             )
             nickname = str(result.fetchone()[0])
             return nickname
@@ -63,16 +66,17 @@ class Database:
         """Обновляет время подписки"""
         with self.connection:
             return self.cursor.execute(
-                "UPDATE users SET time_sub = ? WHERE user_id = ?",
-                (time_sub, user_id,)
+                "UPDATE users SET time_sub = :time_sub WHERE "
+                "user_id = :user_id",
+                {'time_sub': time_sub, 'user_id': user_id}
             )
 
     def get_time_sub(self, user_id):
         """Выводит время подписки"""
         with self.connection:
             result = self.cursor.execute(
-                "SELECT time_sub FROM users WHERE user_id = ?",
-                (user_id,)
+                "SELECT time_sub FROM users WHERE user_id = :user_id",
+                {'user_id': user_id}
             )
             time_sub = int(result.fetchone()[0])
             return time_sub
@@ -81,8 +85,8 @@ class Database:
         """Проверяет есть подписка или нет"""
         with self.connection:
             result = self.cursor.execute(
-                "SELECT time_sub FROM users WHERE user_id = ?",
-                (user_id,)
+                "SELECT time_sub FROM users WHERE user_id = :user_id",
+                {'user_id': user_id}
             )
             time_sub = int(result.fetchone()[0])
 
@@ -100,7 +104,10 @@ class Database:
         date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with self.connection:
             return self.cursor.execute(
-                "INSERT INTO payments (user_id, tg_payment_id, "
-                "provider_payment_id, date) VALUES (?, ?, ?, ?)",
-                (user_id, tg_payment_id, provider_payment_id, date)
+                "INSERT INTO payments "
+                "(user_id, tg_payment_id, provider_payment_id, date)"
+                "VALUES "
+                "(:user_id, :tg_payment_id, :provider_payment_id, :date)",
+                {'user_id': user_id, 'tg_payment_id': tg_payment_id,
+                 'provider_payment_id': provider_payment_id, 'date': date}
             )

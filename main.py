@@ -60,7 +60,7 @@ async def start(message: types.Message):
         если его там нет"""
     if not db.user_exists(message.from_user.id):
         db.add_user(message.from_user.id)
-        await bot.send_message(message.from_user.id, 'Укажите ваш ник')
+        await bot.send_message(message.from_user.id, 'Укажите ваш ник:')
     else:
         await bot.send_message(
             message.from_user.id,
@@ -277,4 +277,7 @@ async def process_pay(message: types.Message):
 
 
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+    try:
+        executor.start_polling(dp, skip_updates=True)
+    except Exception as e:
+        print(f"Произошла ошибка во время выполнения: {e}")
