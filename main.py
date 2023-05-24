@@ -71,7 +71,7 @@ async def start(message: types.Message):
 
 @dp.chat_join_request_handler()
 async def join(update: types.ChatJoinRequest):
-    """Обработка заявок на вступление в канал и проверка присутствия
+    """Обработка заявок на вступление в КАНАЛ и проверка присутствия
         пользователя в бд и наличие у него подписки """
     if db.user_exists(update.from_user.id) and \
             db.get_sub_status(update.from_user.id):
