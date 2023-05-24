@@ -1,6 +1,5 @@
-from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
-                           InlineKeyboardMarkup, InlineKeyboardButton)
-
+from aiogram.types import (InlineKeyboardButton, InlineKeyboardMarkup,
+                           KeyboardButton, ReplyKeyboardMarkup)
 
 btnProfile = KeyboardButton('ПРОФИЛЬ')
 btnSub = KeyboardButton('ПОДПИСКА')

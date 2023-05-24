@@ -1,35 +1,39 @@
+import asyncio
+import datetime
 import logging
 import os
-import asyncio
-# import stripe
+import time
+
+import aiocron
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentType
 from dotenv import load_dotenv
-import markups as nav
-import time
-import datetime
-import aiocron
-from db import Database
 
+import markups as nav
+from db import Database
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=os.getenv('TOKEN', default='some_key'))
-chat_id = os.getenv('CHAT_ID')
-GROUP_URL = os.getenv('GROUP_URL')
+channel_id = os.getenv('CHANNEL_ID')
 STRIP = os.getenv('STRIP')
 UKASSA = os.getenv('UKASSA')
+GROUP_URL = os.getenv('GROUP_URL')
+
+ExistError = os.getenv('UserNotExist')
 
 dp = Dispatcher(bot)
 db = Database('database.db')
 
 
 def days_to_seconds(days):
+    """Перевод дней в секунды"""
     return days * 24 * 60 * 60
 
 
 def time_sub_day(get_time):
+    """Показывает сколько дней подписки осталось"""
     time_now = int(time.time())
     middle_time = int(get_time) - time_now
     if middle_time <= 0:
@@ -41,14 +45,20 @@ def time_sub_day(get_time):
         return dt
 
 
-async def check_member(chat_id: int, user_id: int) -> bool:
-    chat_member = await bot.get_chat_member(chat_id, user_id)
-    return chat_member.status != 'left'
+async def check_member(channel_id: int, user_id: int):
+    """Проверка есть ли пользователь в группе"""
+    try:
+        await bot.get_chat_member(channel_id, user_id)
+        return True
+    except ExistError:
+        return False
 
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    if (not db.user_exists(message.from_user.id)):
+    """"Обработка команды Start, добовляем пользователя в бд,
+        если его там нет"""
+    if not db.user_exists(message.from_user.id):
         db.add_user(message.from_user.id)
         await bot.send_message(message.from_user.id, 'Укажите ваш ник')
     else:
@@ -59,38 +69,17 @@ async def start(message: types.Message):
         )
 
 
-# @dp.message_handler(content_types=['new_chat_members'])
-# async def handle_new_members(message: types.Message):
-#     for member in message.new_chat_members:
-#         if db.user_exists(member.id) and db.get_sub_status(member.id):
-#             await bot.restrict_chat_member(
-#                 message.chat.id, member.id, types.ChatPermissions()
-#             )
-#         else:
-#             await bot.ban_chat_member(message.chat.id, member.id)
-#             await asyncio.sleep(5)
-#             await bot.unban_chat_member(message.chat.id, member.id)
-#             await bot.send_photo(
-#                 member.id,
-#                 photo=open('static/ha-ha.jpg', 'rb'),
-#                 caption='У вас нет подписки, вы не можете присоединяться к '
-#                 'этому каналу!',
-#             )
-#             await bot.send_message(member.id, '/start')
-
-
 @dp.chat_join_request_handler()
 async def join(update: types.ChatJoinRequest):
+    """Обработка заявок на вступление в канал и проверка присутствия
+        пользователя в бд и наличие у него подписки """
     if db.user_exists(update.from_user.id) and \
             db.get_sub_status(update.from_user.id):
-        await bot.restrict_chat_member(
-            chat_id, update.from_user.id, types.ChatPermissions()
-        )
         await update.approve()
     else:
-        await bot.ban_chat_member(chat_id, update.from_user.id)
+        await bot.ban_chat_member(update.chat.id, update.from_user.id)
         await asyncio.sleep(5)
-        await bot.unban_chat_member(chat_id, update.from_user.id)
+        await bot.unban_chat_member(update.chat.id, update.from_user.id)
         await bot.send_photo(
             update.from_user.id,
             photo=open('static/ha-ha.jpg', 'rb'),
@@ -101,6 +90,9 @@ async def join(update: types.ChatJoinRequest):
 
 
 async def check_subscriptions():
+    """Проверка подписчиков канала, если у пользвателя подписке осталось меньше
+        3х дней он получит оповещение, если подписка закончилась его кикнет из
+        канала"""
     now = int(time.time())
     three_days = now + 3 * 24 * 60 * 60
     users = db.get_all_users()
@@ -108,23 +100,23 @@ async def check_subscriptions():
         user_id = user[1]
         sub_end_time = user[3]
         time_left = sub_end_time - now
-        print(time_left)
-        print(now)
-        if sub_end_time < now and await check_member(chat_id, user_id) is True:
-            await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+        if sub_end_time < now and await check_member(channel_id, user_id):
+            await bot.kick_chat_member(channel_id, user_id=user_id)
             await asyncio.sleep(5)
-            await bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
+            await bot.unban_chat_member(channel_id, user_id=user_id)
             await bot.send_photo(
                 user_id,
                 photo=open('static/loh.jpg', 'rb'),
-                caption='Ваша подписка закончилась!')
+                caption='Ваша подписка закончилась!'
+            )
         elif sub_end_time <= three_days and \
-                await check_member(chat_id, user_id) is True:
+                await check_member(channel_id, user_id):
             days_left = int(time_left / (24 * 60 * 60))
             hours_left = int(time_left / (60 * 60) % 24)
             minutes_left = int(time_left / 60 % 60)
-            message = (f'Вашей подписке осталось: дней {days_left} '
-                       f'часов {hours_left}:{minutes_left}')
+            message = (
+                f'Вашей подписке осталось: дней {days_left} часов '
+                f'{hours_left}:{minutes_left}')
             await bot.send_photo(
                 user_id,
                 photo=open('static/tik-tak.webp', 'rb'),
@@ -132,17 +124,20 @@ async def check_subscriptions():
             )
 
 
-@aiocron.crontab('35 14 * * *')  # запуск каждый день в 00:00
+@aiocron.crontab('00 00 * * *')  # запуск каждый день в 00:00
 async def check_subscriptions_job():
+    """Функция автозапуска проверки подписчиков"""
     await check_subscriptions()
 
 
 @dp.message_handler()
 async def bot_message(message: types.Message):
+
     if message.chat.type == 'private':
         if message.text == 'ПРОФИЛЬ':
-            user_nickname = ('Ник: FIRE BEAVERS ' +
-                             db.get_nickname(message.from_user.id))
+            user_nickname = (
+                'Ник: FIRE BEAVERS ' + db.get_nickname(message.from_user.id)
+            )
             user_sub = time_sub_day(db.get_time_sub(message.from_user.id))
             if user_sub is False:
                 user_sub = '\n Подписка: НЕТ'
@@ -151,14 +146,12 @@ async def bot_message(message: types.Message):
             await bot.send_message(
                 message.from_user.id, user_nickname + user_sub
             )
-
         elif message.text == 'ПОДПИСКА':
             await bot.send_message(
                 message.from_user.id,
                 'Описание подписки',
                 reply_markup=nav.sub_inline_markup
             )
-
         elif message.text == 'ССЫЛКА':
             if db.get_sub_status(message.from_user.id):
                 await bot.send_photo(
@@ -175,11 +168,11 @@ async def bot_message(message: types.Message):
                 await bot.send_photo(
                     message.from_user.id,
                     photo=open('static/plati.jpg', 'rb'),
-                    caption='Купите подписку')
-
+                    caption='Купите подписку'
+                )
         else:
             if db.get_signup(message.from_user.id) == 'setnickname':
-                if (len(message.text) > 15):
+                if len(message.text) > 15:
                     await bot.send_message(
                         message.from_user.id,
                         'Никнейм не должен превышать 15 символов'
@@ -199,11 +192,16 @@ async def bot_message(message: types.Message):
                         reply_markup=nav.mainMenu
                     )
             else:
-                await bot.send_message(message.from_user.id, 'Что?')
+                await bot.send_message(
+                    message.from_user.id,
+                    'Используйте кнопки, если их нет пропишите команду /start'
+                )
 
 
 @dp.callback_query_handler(text='submonth')
 async def submonth(call: types.CallbackQuery):
+    """Обработка callback-запроса, отправляем пользователю счет на оплату
+        подписки на канал в USD валюте"""
     await bot.delete_message(call.from_user.id, call.message.message_id)
     await bot.send_invoice(
         chat_id=call.from_user.id,
@@ -219,6 +217,8 @@ async def submonth(call: types.CallbackQuery):
 
 @dp.callback_query_handler(text='submonthru')
 async def submonthru(call: types.CallbackQuery):
+    """Обработка callback-запроса, отправляем пользователю счет на оплату
+        подписки на канал в рублях"""
     await bot.delete_message(call.from_user.id, call.message.message_id)
     await bot.send_invoice(
         chat_id=call.from_user.id,
@@ -236,11 +236,14 @@ async def submonthru(call: types.CallbackQuery):
 async def process_pre_checkout_query(
     pre_checkout_query: types.PreCheckoutQuery
 ):
+    """Функция обработки платежа"""
     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
 @dp.message_handler(content_types=ContentType.SUCCESSFUL_PAYMENT)
 async def process_pay(message: types.Message):
+    """При успешно платеже добавляет данные об оплате в бд, и добавляет 30 дней
+        подписки"""
     if message.successful_payment.invoice_payload == 'month_sub':
         db.add_payment(
             message.from_user.id,
@@ -256,8 +259,9 @@ async def process_pay(message: types.Message):
                 caption='Вам выдана подписка на месяц!'
             )
         else:
-            time_sub = (db.get_time_sub(message.from_user.id) +
-                        days_to_seconds(30))
+            time_sub = (
+                db.get_time_sub(message.from_user.id) + days_to_seconds(30)
+            )
             db.set_time_sub(message.from_user.id, time_sub)
             await bot.send_photo(
                 message.from_user.id,
