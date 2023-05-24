@@ -76,6 +76,12 @@ async def join(update: types.ChatJoinRequest):
     if db.user_exists(update.from_user.id) and \
             db.get_sub_status(update.from_user.id):
         await update.approve()
+        await bot.send_message(
+            update.from_user.id,
+            text='<a href="{}">Перейти в группу</a>'.format(GROUP_URL),
+            parse_mode='HTML',
+            disable_web_page_preview=True
+        )
     else:
         await bot.ban_chat_member(update.chat.id, update.from_user.id)
         await asyncio.sleep(5)
@@ -160,7 +166,7 @@ async def bot_message(message: types.Message):
                 )
                 await bot.send_message(
                     message.from_user.id,
-                    text='<a href="{}">Перейти в группу</a>'.format(GROUP_URL),
+                    text='<a href="{}">Отправить заявку</a>'.format(GROUP_URL),
                     parse_mode='HTML',
                     disable_web_page_preview=True
                 )
