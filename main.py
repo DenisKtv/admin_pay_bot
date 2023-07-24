@@ -130,7 +130,7 @@ async def check_subscriptions():
             )
 
 
-@aiocron.crontab('00 00 * * *')  # запуск каждый день в 00:00
+@aiocron.crontab('23 15 * * *')  # запуск каждый день в 00:00
 async def check_subscriptions_job():
     """Функция автозапуска проверки подписчиков"""
     await check_subscriptions()
